@@ -1,4 +1,5 @@
 import serial_wrapper
+import redcap
 
 swanSer = None
 
