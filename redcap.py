@@ -3,9 +3,15 @@ import requests
 tokenFile = "~/Documents/hemodynamic_monitor/token.auth"
 postUrl = "https://redcap.wakehealth.edu/redcap/api/"
 
-def post_recprd(theDatas):
+def get_token():
+    f = open(tokenFile)
+    theToken = f.read()
+    f.close()
+    return(theToken)
+
+def post_redcap(theDatas):
     data = {
-      'token': 'C65A9C1E66A98E3F35BF8EF99DDAB4B0',
+      'token': , get_token(),
       'content': 'record',
       'action': 'import',
       'format': 'json',
