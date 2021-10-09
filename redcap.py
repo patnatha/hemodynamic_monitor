@@ -1,18 +1,37 @@
 import requests
+import json
 
-tokenFile = "~/Documents/hemodynamic_monitor/token.auth"
+tokenFile = "/home/pi/Documents/hemodynamic_monitor/token.auth"
 postUrl = "https://redcap.wakehealth.edu/redcap/api/"
 
 def get_token():
     f = open(tokenFile)
-    theToken = f.read()
+    theToken = f.read().strip("\n")
     f.close()
     return(theToken)
+loaded_token = get_token()
+
+def convert_int(theVal):
+    if(theVal == None):
+        return(None)
+    else:
+        try:
+            return(str(int(round(theVal, 0))))
+        except:
+            return(None)
+
+def convert_one_decimal(theVal):
+    if(theVal == None):
+        return(None)
+    else:
+        try:
+            return(str(round(theVal,1)))
+        except:
+            return(None)
 
 def post_redcap(theDatas):
-    theToken = get_token()
     data = {
-      'token': theToken,
+      'token': loaded_token,
       'content': 'record',
       'action': 'import',
       'format': 'json',
@@ -24,23 +43,25 @@ def post_redcap(theDatas):
       'returnFormat': 'json'
     }
 
-    data['data'] = json.dumps([{
-        'record_id': 0,
-        'name': 'test',
-        'datetime': '2021-10-23 03:44:30',
-        'temperature': 36.9,
-        'cardiac_output': '4.0',
-        'cardiac_output_stat': 4.2,
-        'end_diastolic_volume': 300,
-        'rv_ejection_fraction': 35,
-        'stroke_volume': 45,
-        'svo2': 95,
-        'sqi': 3,
-        'nirs_upper': 85,
-        'nirs_lower': 80
-        }])
+    #Build the final data strcut
+    theSendStruct = {'record_id': 0}
+    for key in theDatas:
+        theSendStruct[key] = theDatas[key]
+
+    #Convert the final data struct to JSON
+    data['data'] = json.dumps([theSendStruct])
+
+    #Send the final data struct
+    #print(data)
     r = requests.post('https://redcap.wakehealth.edu/redcap/api/',data=data)
-    print(r.json())
-    
-    return(r.status_code)
-  
+   
+    #Parse the resulting output
+    if(r.status_code != 200):
+        print(r.json())
+        return(-2)
+    elif(r.status_code == 200 and r.json()['count'] != 1):
+        print(r.json())
+        return(-1)
+    else:
+        return(1)
+ 

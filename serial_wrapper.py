@@ -20,20 +20,24 @@ def check_device_stream(COM):
 
         #Decode the values
         decVal = theVal.decode("cp1252")
-        
+
         #Count number of commas
         commaCnt = len(decVal.split(","))
         if(commaCnt == 6 or commaCnt == 12):
             print("FOUND NIRS:", COM)
             return(NIRS)
+        elif("N2515-0110-78" in decVal):
+            print("FOUND VIGILENCE")
+            return(VIGILENCE)
 
+        #Close the serial
         ser.close()
     except Exception as err:
-        print("YASE")
+        print("check_device_stream")
         print(err)
         ser.close()
    
-def connected_devices():
+def connected_devices(skip={}):
     connDevices = {NIRS: None, HEMOSPHERE: None, VIGILENCE: None}
     try:
         a = serial.tools.list_ports.comports()
@@ -42,7 +46,8 @@ def connected_devices():
             theFind = None
             
             #print(p.name, p.pid, p.vid, p.manufacturer, p.product, p.serial_number)
-            if(not p.product == None and p.product.startswith("USB-Serial")):
+            if(theDevice not in list(skip.values()) and 
+               not p.product == None and p.product.startswith("USB-Serial")):
                 theFind = check_device_stream(theDevice)
 
             if(theFind != None):
@@ -50,13 +55,13 @@ def connected_devices():
 
         return(connDevices)
     except Exception as err:
-        print("HMM")
+        print("connected_devices")
         print(err)
         return connDevices
 
-def connect_swan():
+def connect_swan(toSkip = []):
     try:
-        conDev = connected_devices()
+        conDev = connected_devices(toSkip)
         if(conDev[HEMOSPHERE] != None):
             return(serial.Serial(conDev[HEMOSPHERE], baudrate=BAUDRATE, timeout=3))
         elif(conDev[VIGILENCE] != None):
@@ -121,9 +126,9 @@ def read_swan(ser):
         print(err)
         return(None)
 
-def connect_nirs():
+def connect_nirs(toSkip = {}):
     try:
-        conDev = connected_devices()
+        conDev = connected_devices(toSkip)
         if(conDev[NIRS] != None):
             return(serial.Serial(conDev[NIRS], baudrate=BAUDRATE, timeout=3))
         else:
@@ -150,7 +155,8 @@ def read_nirs(ser):
             if(nirsLower == -1): nirsLower = None
 
             #Build return structures
-            nirs_res = {"nirs_upper": nirsUpper, "nirs_lower": nirsLower}
+            nirs_res = {"datetime": datetime.now(),
+                        "nirs_upper": nirsUpper, "nirs_lower": nirsLower}
             return(nirs_res)
         else:
             return(None)
