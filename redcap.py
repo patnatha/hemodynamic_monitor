@@ -10,8 +10,9 @@ def get_token():
     return(theToken)
 
 def post_redcap(theDatas):
+    theToken = get_token()
     data = {
-      'token': , get_token(),
+      'token': theToken,
       'content': 'record',
       'action': 'import',
       'format': 'json',
