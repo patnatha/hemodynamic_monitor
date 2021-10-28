@@ -5,6 +5,8 @@ from redcap import convert_int, convert_one_decimal
 import time
 import threading
 from datetime import datetime
+import board
+from digitalio import DigitalInOut, Direction, Pull
 
 #This the list for collating centrally and is shared between threads
 queueLock = threading.Lock()
@@ -14,8 +16,46 @@ queue = []
 conPorts = {}
 conPortLock = threading.Lock()
 
+#The log variable and associate mulithtreading lock
+toLog = False
+toLogLock = threading.Lock()
+
+#The GPIO access to the nirs connected LED
+def nirsLed(onOff):
+    theLed = DigitalInOut(board.D27)
+    theLed.direction = Direction.OUTPUT
+    theLed.value = onOff
+nirsLed(False)
+
+#The GPIO access to the SWAN connected LED
+def swanLed(onOff):
+    theLed = DigitalInOut(board.D4)
+    theLed.direction = Direction.OUTPUT
+    theLed.value = onOff
+swanLed(False)
+
+#The function for monitoring the logging button
+def monitorLogButton():
+    logButton = DigitalInOut(board.D20)
+    logButton.direction = Direction.INPUT
+    logButton.pull = Pull.UP
+
+    logLed = DigitalInOut(board.D17)
+    logLed.direction = Direction.OUTPUT
+    logLed.value = False
+
+    global toLog
+
+    while True:
+        logLed.value = not logButton.value
+        toLogLock.acquire()
+        toLog = (not logButton.value)
+        toLogLock.release()
+        time.sleep(1)
+
 def swanReading():
     swanSer = None
+    global queue, queueLock, conPorts, conPortLock
     while True:
         if(swanSer == None):
             #Get the port lock
@@ -28,8 +68,10 @@ def swanReading():
             if(swanSer != None):
                 conPorts[HEMOSPHERE] = swanSer.port
                 conPorts[VIGILENCE] = swanSer.port
+                swanLed(True)
             else:
                 #If not port available wait 5 seconds
+                swanLed(False)
                 time.sleep(5)
 
             #Release the port lock
@@ -46,6 +88,7 @@ def swanReading():
                 conPortLock.acquire()
                 conPorts[VIGILENCE] = None
                 conPorts[HEMOSPHERE] = None
+                swanLed(False)
                 conPortLock.release()
             else:
                 #Push this datapoint into the list buffer
@@ -55,6 +98,7 @@ def swanReading():
 
 def nirsReading():
     nirsSer = None
+    global queue, queueLock, conPorts, conPortLock
     while True:
         if(nirsSer == None):
             #Get the port lock
@@ -66,8 +110,10 @@ def nirsReading():
             #Set this port as used
             if(nirsSer != None):
                 conPorts[NIRS] = nirsSer.port
+                nirsLed(True)
             else:
                 #If no port available wait 5 seconds
+                nirsLed(False)
                 time.sleep(5)
 
             #Release the lock
@@ -83,6 +129,7 @@ def nirsReading():
                 #Release this port
                 conPortLock.acquire()
                 conPorts[NIRS] = None
+                nirsLed(False)
                 conPortLock.release()
             else:
                 #Push the datapoint into the list buffer
@@ -90,19 +137,21 @@ def nirsReading():
                 queue.append(nirsLine)
                 queueLock.release()
 
-swanThread = None
-nirsThread = None
+#Start the swan thread
+swanThread = threading.Thread(target=swanReading, args=(), daemon=True)
+swanThread.start()
+
+#start the nirs thread
+nirsThread = threading.Thread(target=nirsReading, args=(), daemon=True)
+nirsThread.start()
+
+#start the logging button thread
+loggingButton = threading.Thread(target=monitorLogButton, args=(), daemon=True)
+loggingButton.start()
+
 while True:
-    if(swanThread == None):
-        swanThread = threading.Thread(target=swanReading, args=(), daemon=True)
-        swanThread.start()
-
-    if(nirsThread == None):
-        nirsThread = threading.Thread(target=nirsReading, args=(), daemon=True)
-        nirsThread.start()
-
     #Sleep for two seconds 
-    time.sleep(2)
+    time.sleep(5)
    
     #List variable for snending
     toSend = []
@@ -116,8 +165,8 @@ while True:
         #Pop the first item in the queue
         item = queue.pop(0)
 
-        if((datetime.now() - item['datetime']).seconds > 4):
-            #Process item if greater than 5 seconds in the past
+        if((datetime.now() - item['datetime']).seconds > 5):
+            #Process item if greater than 6 seconds in the past
             toSend.append(item)
         else:
             #Requeue the item if too recent
@@ -126,24 +175,72 @@ while True:
     #Release the queue lock
     queueLock.release()
 
-    #Process the item
-    for item in toSend:
-        #Build the translation struct to red cap
-        theStruct = {}
-        theStruct['name'] = item['datetime'].strftime("%Y-%m-%d")
-        theStruct['datetime'] = item['datetime'].strftime("%Y-%m-%d %H:%M:%S")
-        theStruct['temperature'] = convert_one_decimal(item['temp'])
-        theStruct['cardiac_output'] = convert_one_decimal(item['CO'])
-        theStruct['cardiac_output_stat'] = convert_one_decimal(item['CO_STAT'])
-        theStruct['end_diastolic_volume'] = convert_int(item['EDV'])
-        theStruct['rv_ejection_fraction'] = convert_int(item['RVEF'])
-        theStruct['stroke_volume'] = convert_int(item['SV'])
-        theStruct['svo2'] = convert_int(item['SVO2'])
-        theStruct['sqi'] = convert_int(item['SQI'])
-        theStruct['nirs_upper'] = None
-        theStruct['nirs_lower'] = None
+    #Check to see if the log button has been pressed
+    toLogLock.acquire()
+    toLogIt = toLog
+    toLogLock.release()
 
-        #print(theStruct)
-        postRes = redcap.post_redcap(theStruct)
-        print(postRes)
+    #Process the item
+    if(toLogIt):
+        #Collate the list to combine to the nearest second
+        timeStamps = {}
+        for index, item in enumerate(toSend):
+            theTs = item['datetime'].strftime("%Y-%m-%d %H:%M:%S")
+            if(theTs not in timeStamps): timeStamps[theTs] = []
+            timeStamps[theTs].append(index)
+
+        #Iterate through the time stamps
+        for ts in timeStamps:   
+            #Get the first item for the timestamp
+            item = toSend[timeStamps[ts][0]]
+
+            #Build the translation struct to red cap
+            theStruct = {}
+            theStruct['name'] = item['datetime'].strftime("%Y-%m-%d")
+            theStruct['datetime'] = ts
+            theStruct['temperature'] = None
+            theStruct['cardiac_output'] = None
+            theStruct['cardiac_output_stat'] = None
+            theStruct['end_diastolic_volume'] = None
+            theStruct['rv_ejection_fraction'] = None
+            theStruct['stroke_volume'] = None
+            theStruct['svo2'] = None
+            theStruct['sqi'] = None
+            theStruct['nirs_upper'] = None
+            theStruct['nirs_lower'] = None
+
+            #Get the values for this timestamp
+            for theInd in timeStamps[ts]:
+                item = toSend[theInd]
+                try:
+                    theStruct['temperature'] = convert_one_decimal(item['temp'])
+                    theStruct['cardiac_output'] = convert_one_decimal(item['CO'])
+                    theStruct['cardiac_output_stat'] = convert_one_decimal(item['CO_STAT'])
+                    theStruct['end_diastolic_volume'] = convert_int(item['EDV'])
+                    theStruct['rv_ejection_fraction'] = convert_int(item['RVEF'])
+                    theStruct['stroke_volume'] = convert_int(item['SV'])
+                    theStruct['svo2'] = convert_int(item['SVO2'])
+                    theStruct['sqi'] = convert_int(item['SQI'])
+                except:
+                    #print("Not Swan")
+                    notSwan = True
+
+                try:
+                    theStruct['nirs_upper'] = convert_int(item['nirs_upper'])
+                    theStruct['nirs_lower'] = convert_int(item['nirs_lower'])
+                except: 
+                    #print("Not NIRS")
+                    notNirs = True
+
+            #Check to make sure not an empty struct
+            postIt = False
+            for key in theStruct:
+                if(key != "name" and key != "datetime" and theStruct[key] != None):
+                    postIt = True
+                    break
+
+            if(postIt):
+                #print(theStruct)
+                postRes = redcap.post_redcap(theStruct)
+                print("Posted:", postRes)
 

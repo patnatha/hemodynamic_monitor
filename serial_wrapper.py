@@ -5,6 +5,8 @@ import glob
 import struct
 from datetime import datetime
 
+debug = False
+
 BAUDRATE = 9600
 HEMOSPHERE = "hemosp"
 VIGILENCE = "vigII"
@@ -27,8 +29,12 @@ def check_device_stream(COM):
             print("FOUND NIRS:", COM)
             return(NIRS)
         elif("N2515-0110-78" in decVal):
-            print("FOUND VIGILENCE")
+            print("FOUND VIGILENCE:", COM)
             return(VIGILENCE)
+        elif("N2515-8265-41" in decVal):
+            print("FOUND HEMOSPHERE:", COM)
+            return(HEMOSPHERE)
+        print(decVal)
 
         #Close the serial
         ser.close()
@@ -120,7 +126,8 @@ def read_swan(ser):
         results = dict()
         results["datetime"] = datetime.now()
         for itemUnpack in prefixes.keys():
-            results[prefixes[itemUnpack]] = parse_swan(decodedLine, itemUnpack) 
+            results[prefixes[itemUnpack]] = parse_swan(decodedLine, itemUnpack)
+        if(debug): print(results['CO'], results['SVO2'])
         return(results)
     except Exception as err:
         print(err)
@@ -157,6 +164,7 @@ def read_nirs(ser):
             #Build return structures
             nirs_res = {"datetime": datetime.now(),
                         "nirs_upper": nirsUpper, "nirs_lower": nirsLower}
+            if(debug): print(nirsUpper, nirsLower)
             return(nirs_res)
         else:
             return(None)
