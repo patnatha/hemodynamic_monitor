@@ -2,6 +2,7 @@ import serial_wrapper
 from serial_wrapper import NIRS, VIGILENCE, HEMOSPHERE, BAUDRATE
 import redcap
 from redcap import convert_int, convert_one_decimal
+import which_or
 import time
 import threading
 from datetime import datetime
@@ -196,7 +197,7 @@ while True:
 
             #Build the translation struct to red cap
             theStruct = {}
-            theStruct['name'] = item['datetime'].strftime("%Y-%m-%d")
+            theStruct['name'] = which_or(item['datetime'])
             theStruct['datetime'] = ts
             theStruct['temperature'] = None
             theStruct['cardiac_output'] = None
