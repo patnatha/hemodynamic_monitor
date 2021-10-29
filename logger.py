@@ -197,7 +197,7 @@ while True:
 
             #Build the translation struct to red cap
             theStruct = {}
-            theStruct['name'] = which_or(item['datetime'])
+            theStruct['name'] = which_or.returnName(item['datetime'])
             theStruct['datetime'] = ts
             theStruct['temperature'] = None
             theStruct['cardiac_output'] = None

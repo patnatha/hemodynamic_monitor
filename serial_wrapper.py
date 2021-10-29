@@ -11,8 +11,11 @@ BAUDRATE = 9600
 HEMOSPHERE = "hemosp"
 VIGILENCE = "vigII"
 NIRS = "nirs"
+nirsInd = [-1, -1]
 
 def check_device_stream(COM):
+    global nirsInd
+
     ser = serial.Serial(COM, baudrate=BAUDRATE, timeout=1)
     try:
         #Read two full lines
@@ -26,8 +29,29 @@ def check_device_stream(COM):
         #Count number of commas
         commaCnt = len(decVal.split(","))
         if(commaCnt == 6 or commaCnt == 12):
-            print("FOUND NIRS:", COM)
-            return(NIRS)
+            cntNegOne = 0
+            cntZero = 0
+            cntNotEmpty = 0
+            for item in decVal.strip("\r\n").split(","):
+                if(item == "-1"):
+                    cntNegOne += 1
+                elif(item == "0"):
+                    cntZero += 1
+                else:
+                    cntNotEmpty += 1
+
+            if(cntNegOne > 0 and cntZero == 2):
+                print("FOUND CASMED NIRS:", COM)
+                nirsInd = [0, 1]
+                return(NIRS)
+            elif(cntNegOne == 0 and cntZero > 0):
+                print("FOUND HEMOSPHERE NIRS:", COM)
+                nirsInd = [2, 3]
+                return(NIRS)
+            else:
+                print("Unable to parse NIRS:", decVal, cntNegOne, cntZero, cntNotEmpty)
+                nirsInd = [-1,-1]
+                return(None)
         elif("N2515-0110-78" in decVal):
             print("FOUND VIGILENCE:", COM)
             return(VIGILENCE)
@@ -154,11 +178,11 @@ def read_nirs(ser):
         #Check quality of read line
         if(len(splitLine) == 6):
             #Parse the nirs upper
-            nirsUpper = int(splitLine[0])
+            nirsUpper = int(splitLine[nirsInd[0]])
             if(nirsUpper == -1): nirsUpper = None
             
             #parse the nirs lower
-            nirsLower = int(splitLine[1])
+            nirsLower = int(splitLine[nirsInd[1]])
             if(nirsLower == -1): nirsLower = None
 
             #Build return structures
