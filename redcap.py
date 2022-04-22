@@ -47,9 +47,8 @@ def create_sqlite_table():
             cur.execute(sql)
             conn.commit()
             cur.close()
-            conn.close()
         except Exception as err:
-            print("create_sqliute_table ERROR", err)
+            print("create_sqlite_table ERROR", err)
 
     dbLock.release()
     
@@ -64,10 +63,8 @@ def log_later(theDatas):
 
             sql = 'INSERT INTO ' + tableName + ' (the_text) VALUES("' + json.dumps(theDatas).replace('"', '\'') + '");'
             cur.execute(sql)
-
             conn.commit()
             cur.close()
-            conn.close()
         except Excepation as err:
             print("Log Later Error: ", err)
 
@@ -97,7 +94,6 @@ def survail_db_to_upload():
                     cur.execute(sql)
                 conn.commit()
                 cur.close()
-                conn.close()
             except Exception as err:
                 print("survail_db_to_upload ERROR:", err)
         
