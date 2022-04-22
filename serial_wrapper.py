@@ -44,7 +44,7 @@ def check_device_stream(COM):
                 print("FOUND CASMED NIRS:", COM)
                 nirsInd = [0, 1]
                 return(NIRS)
-            elif(cntNegOne == 0 and cntZero > 0):
+            elif((cntNegOne == 0 or cntNegOne == 2) and (cntZero == 0 or cntZero == 1)):
                 print("FOUND HEMOSPHERE NIRS:", COM)
                 nirsInd = [2, 3]
                 return(NIRS)
@@ -58,7 +58,6 @@ def check_device_stream(COM):
         elif("N2515-8265-41" in decVal):
             print("FOUND HEMOSPHERE:", COM)
             return(HEMOSPHERE)
-        print(decVal)
 
         #Close the serial
         ser.close()
@@ -142,9 +141,9 @@ def read_swan(ser):
         prefixes = {"B": "temp", 
             "C": "CO", 
             "T": "CO_STAT",
-            "J": "EDV",
-            "E": "RVEF",
-            "S": "SV",
+            #"J": "EDV",
+            #"E": "RVEF",
+            #"S": "SV",
             "V": "SVO2",
             "Q": "SQI"}
         results = dict()
@@ -174,7 +173,7 @@ def read_nirs(ser):
         theLine = ser.readline()
         decodedLine = theLine.decode("cp1252")
         splitLine = decodedLine.split(",")
-        
+       
         #Check quality of read line
         if(len(splitLine) == 6):
             #Parse the nirs upper

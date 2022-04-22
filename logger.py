@@ -162,19 +162,24 @@ while True:
 
     #ITerate through all items in the queue
     numOfElem = len(queue)
+    curTime = datetime.now()
     for i in range(0,numOfElem):
         #Pop the first item in the queue
         item = queue.pop(0)
 
-        if((datetime.now() - item['datetime']).seconds > 5):
-            #Process item if greater than 6 seconds in the past
+        if((curTime - item['datetime']).seconds > 5):
+            #Process item if greater than 5 seconds in the past
             toSend.append(item)
         else:
             #Requeue the item if too recent
             queue.append(item)
-    
+
     #Release the queue lock
     queueLock.release()
+
+    #print(len(queue), len(toSend))
+    #if(len(toSend) > 0):
+    #    print("\t", toSend[0]['datetime'].strftime("%H:%M:%S"), toSend[-1]['datetime'].strftime("%H:%M:%S"))
 
     #Check to see if the log button has been pressed
     toLogLock.acquire()
@@ -202,9 +207,6 @@ while True:
             theStruct['temperature'] = None
             theStruct['cardiac_output'] = None
             theStruct['cardiac_output_stat'] = None
-            theStruct['end_diastolic_volume'] = None
-            theStruct['rv_ejection_fraction'] = None
-            theStruct['stroke_volume'] = None
             theStruct['svo2'] = None
             theStruct['sqi'] = None
             theStruct['nirs_upper'] = None
@@ -217,9 +219,6 @@ while True:
                     theStruct['temperature'] = convert_one_decimal(item['temp'])
                     theStruct['cardiac_output'] = convert_one_decimal(item['CO'])
                     theStruct['cardiac_output_stat'] = convert_one_decimal(item['CO_STAT'])
-                    theStruct['end_diastolic_volume'] = convert_int(item['EDV'])
-                    theStruct['rv_ejection_fraction'] = convert_int(item['RVEF'])
-                    theStruct['stroke_volume'] = convert_int(item['SV'])
                     theStruct['svo2'] = convert_int(item['SVO2'])
                     theStruct['sqi'] = convert_int(item['SQI'])
                 except:

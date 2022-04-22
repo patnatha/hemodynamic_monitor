@@ -4,11 +4,13 @@ import sqlite3
 import time
 import threading
 import signal
+import os
 
-tokenFile = "/home/pi/Documents/hemodynamic_monitor/token.auth"
+tokenFile = os.path.join(os.path.dirname(__file__), "token.auth")
 postUrl = "https://redcap.wakehealth.edu/redcap/api/"
-dbFile = "backup.db"
+dbFile = os.path.join(os.path.dirname(__file__), "backup.db")
 tableName = "to_log"
+dbLock = threading.Lock()
 
 def get_token():
     f = open(tokenFile)
@@ -36,55 +38,70 @@ def convert_one_decimal(theVal):
             return(None)
 
 def create_sqlite_table():
-    conn = sqlite3.connect(dbFile)
-    cur = conn.cursor()
-    sql = "CREATE TABLE IF NOT EXISTS " + tableName + " (record_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, the_text TEXT);"
-    cur.execute(sql)
-    conn.commit()
-    conn.close()
+    dbLock.acquire()
+    
+    with sqlite3.connect(dbFile) as conn:
+        try:
+            cur = conn.cursor()
+            sql = "CREATE TABLE IF NOT EXISTS " + tableName + " (record_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, the_text TEXT);"
+            cur.execute(sql)
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as err:
+            print("create_sqliute_table ERROR", err)
+
+    dbLock.release()
     
 def log_later(theDatas):
     create_sqlite_table()
+    
+    dbLock.acquire()
+    
+    with sqlite3.connect(dbFile) as conn: 
+        try:
+            cur = conn.cursor()
 
-    conn = sqlite3.connect(dbFile)
-    cur = conn.cursor()
+            sql = 'INSERT INTO ' + tableName + ' (the_text) VALUES("' + json.dumps(theDatas).replace('"', '\'') + '");'
+            cur.execute(sql)
 
-    sql = 'INSERT INTO ' + tableName + ' (the_text) VALUES("' + json.dumps(theDatas).replace('"', '\'') + '");'
-    cur.execute(sql)
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Excepation as err:
+            print("Log Later Error: ", err)
 
-    conn.commit()
-    conn.close()
+    dbLock.release()
 
 def survail_db_to_upload():
     create_sqlite_table()
 
     while True:
-        try:
-            conn = sqlite3.connect(dbFile)
-            cur = conn.cursor()
+        dbLock.acquire()
+        with sqlite3.connect(dbFile) as conn:
+            try:
+                cur = conn.cursor()
 
-            sql = "SELECT record_id, the_text FROM " + tableName
-            toDel = []
-            for row in cur.execute(sql):
-                theDatas = json.loads(row[1].replace("'","\""))
-                #print(theDatas)
-                postRes = post_redcap(theDatas)
-                if(postRes == 1):
-                    toDel.append(str(row[0]))
-            conn.commit()
-            conn.close()
+                sql = "SELECT record_id, the_text FROM " + tableName
+                toDel = []
+                for row in cur.execute(sql):
+                    theDatas = json.loads(row[1].replace("'","\""))
+                    postRes = post_redcap(theDatas)
+                    if(postRes == 1):
+                        toDel.append(str(row[0]))
+                conn.commit()
 
-            print("SQLITE Posted:", len(toDel))
-            conn = sqlite3.connect(dbFile)
-            cur = conn.cursor()
-            for itemDel in toDel:
-                sql = "DELETE FROM " + tableName + " WHERE record_id = " + itemDel
-                cur.execute(sql)
-            conn.commit()
-            conn.close()
-
-        except Exception as err:
-            print("survail_db_to_upload ERROR:", err)
+                print("SQLITE Posted:", len(toDel))
+                for itemDel in toDel:
+                    sql = "DELETE FROM " + tableName + " WHERE record_id = " + itemDel
+                    cur.execute(sql)
+                conn.commit()
+                cur.close()
+                conn.close()
+            except Exception as err:
+                print("survail_db_to_upload ERROR:", err)
+        
+        dbLock.release()
         time.sleep(60)
 
 survailThread = threading.Thread(target=survail_db_to_upload, args=())
@@ -115,8 +132,6 @@ def post_redcap(theDatas):
         data['data'] = json.dumps([theSendStruct])
 
         #Send the final data struct
-        #log_later(theDatas)
-        #return
         r = requests.post('https://redcap.wakehealth.edu/redcap/api/',data=data)
        
         #Parse the resulting output
