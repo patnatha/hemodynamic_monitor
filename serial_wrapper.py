@@ -172,27 +172,32 @@ def read_nirs(ser):
         #Read a line and parse it up
         theLine = ser.readline()
         decodedLine = theLine.decode("cp1252")
-        splitLine = decodedLine.split(",")
-       
-        #Check quality of read line
-        if(len(splitLine) == 6):
-            #Parse the nirs upper
-            nirsUpper = int(splitLine[nirsInd[0]])
-            if(nirsUpper == -1): nirsUpper = None
-            
-            #parse the nirs lower
-            nirsLower = int(splitLine[nirsInd[1]])
-            if(nirsLower == -1): nirsLower = None
+        firstSplit = decodedLine.split("\r")
+        #print(firstSplit)
+        splitLineList = []
+        for it in firstSplit:
+            if(it != '\n'):
+                splitLineList.append(it.split(","))
+        
+        print(splitLineList)
+        for splitLine in splitLineList:
+            #Check quality of read line
+            if(len(splitLine) == 6):
+                #Parse the nirs upper
+                nirsUpper = int(splitLine[nirsInd[0]])
+                if(nirsUpper == -1): nirsUpper = None
+                
+                #parse the nirs lower
+                nirsLower = int(splitLine[nirsInd[1]])
+                if(nirsLower == -1): nirsLower = None
 
-            #Build return structures
-            nirs_res = {"datetime": datetime.now(),
-                        "nirs_upper": nirsUpper, "nirs_lower": nirsLower}
-            if(debug): print(nirsUpper, nirsLower)
-            return(nirs_res)
-        else:
-            return(None)
-
+                #Build return structures
+                nirs_res = {"datetime": datetime.now(),
+                            "nirs_upper": nirsUpper, "nirs_lower": nirsLower}
+                if(debug): print(nirsUpper, nirsLower)
+                return(nirs_res)
+        print("NIRS Split err")
+        return({"datetime": "error"})
     except Exception as err:
-        print("read_nirs")
-        print(err)
+        print("read_nirs", err)
         return(None)

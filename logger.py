@@ -132,7 +132,7 @@ def nirsReading():
                 conPorts[NIRS] = None
                 nirsLed(False)
                 conPortLock.release()
-            else:
+            elif(nirsLine["datetime"] != "error"):
                 #Push the datapoint into the list buffer
                 queueLock.acquire()
                 queue.append(nirsLine)
@@ -242,5 +242,5 @@ while True:
             if(postIt):
                 #print(theStruct)
                 postRes = redcap.post_redcap(theStruct)
-                print("Posted:", postRes)
+                print("Posted RC:", postRes)
 
